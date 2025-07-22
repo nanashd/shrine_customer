@@ -12,7 +12,7 @@ import { collection, addDoc, updateDoc, doc } from "firebase/firestore";
 
 const sizeSchema = z.object({
   name: z.string().min(1, "サイズ名は必須です"),
-  price: z.coerce.number().min(1, "単価は必須です"),
+  price: z.number().min(1, "単価は必須です"),
 });
 type SizeForm = z.infer<typeof sizeSchema>;
 
