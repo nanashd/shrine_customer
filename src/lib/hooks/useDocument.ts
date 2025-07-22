@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { doc, onSnapshot, DocumentData, getFirestore } from "firebase/firestore";
+import { doc, onSnapshot, DocumentData } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 export function useDocument<T = DocumentData>(collectionPath: string, docId: string) {

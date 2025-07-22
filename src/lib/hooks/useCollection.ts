@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { collection, onSnapshot, QuerySnapshot, DocumentData, getFirestore } from "firebase/firestore";
+import { collection, onSnapshot, QuerySnapshot, DocumentData } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 export function useCollection<T = DocumentData>(collectionPath: string) {

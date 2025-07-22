@@ -35,7 +35,7 @@ export default function CustomerImport() {
       header: true,
       skipEmptyLines: true,
       complete: (results) => {
-        const rows: PreviewRow[] = (results.data as any[]).map((row) => {
+        const rows: PreviewRow[] = (results.data as Record<string, string>[]).map((row) => {
           const size = sizes.find((s) => s.name === row["御札サイズ"]);
           const wish = wishes.find((w) => w.name === row["願意"]);
           let error = "";

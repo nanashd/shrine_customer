@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Dialog as ConfirmDialog, DialogContent as ConfirmDialogContent, DialogHeader as ConfirmDialogHeader, DialogTitle as ConfirmDialogTitle } from "@/components/ui/dialog";
 import { useCollection } from "@/lib/hooks/useCollection";
-import { Customer } from "@/types/customer";
+import { Customer, Family } from "@/types/customer";
 import { Size } from "@/types/size";
 import { formatPhone } from "@/utils/phoneFormat";
 import { normalizeKana } from "@/utils/normalizeKana";
@@ -12,7 +12,7 @@ import { useForm, useFieldArray } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { db } from "@/lib/firebase";
-import { collection, addDoc, updateDoc, doc, serverTimestamp, Timestamp, deleteDoc } from "firebase/firestore";
+import { collection, addDoc, updateDoc, doc, serverTimestamp, deleteDoc } from "firebase/firestore";
 import SearchBox from "@/components/SearchBox";
 import { Wish } from "@/types/wish";
 import CustomerImport from "@/components/CustomerImport";
@@ -74,11 +74,11 @@ export default function CustomerTable() {
   }, [selectedSize, setValue]);
 
   // 家族から顧客追加用の初期値セット
-  const handleAddFamilyAsCustomer = (family: any) => {
+  const handleAddFamilyAsCustomer = (family: Family | { name?: string; furigana?: string; relation?: string }) => {
     setFamilyToAdd({
-      name: family.name || "",
-      furigana: family.furigana || "",
-      relation: family.relation || "",
+      name: family.name ? String(family.name) : "",
+      furigana: family.furigana ? String(family.furigana) : "",
+      relation: family.relation ? String(family.relation) : "",
       address: watch("address") || "",
       phone: watch("phone") || "",
     });
