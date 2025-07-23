@@ -179,6 +179,15 @@ export default function CustomerTable() {
 
   // 住所グルーピング・アコーディオン表示を削除
 
+  // ページネーション用state
+  const [page, setPage] = useState(1);
+  const pageSize = 50;
+  const paged = filtered.slice((page - 1) * pageSize, page * pageSize);
+  const totalPages = Math.ceil(filtered.length / pageSize);
+
+  // 検索やデータ変更時にページを1に戻す
+  useEffect(() => { setPage(1); }, [search, customers]);
+
   return (
     <div>
       <h2 className="text-xl font-bold mb-4 text-[#C41E3A]">顧客台帳</h2>
@@ -211,11 +220,11 @@ export default function CustomerTable() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={10} className="text-center py-4">Loading...</td></tr>
-            ) : filtered.length === 0 ? (
-              <tr><td colSpan={10} className="text-center py-4 text-gray-400">該当なし</td></tr>
+              <tr><td colSpan={13} className="text-center py-4">Loading...</td></tr>
+            ) : paged.length === 0 ? (
+              <tr><td colSpan={13} className="text-center py-4 text-gray-400">該当なし</td></tr>
             ) : (
-              filtered.map((c) => {
+              paged.map((c) => {
                 const sizeName = sizes.find(s => s.id === c.sizeId)?.name || "-";
                 const price = c.price ?? sizes.find(s => s.id === c.sizeId)?.price ?? "-";
                 const wishName = wishes.find(w => w.id === c.wishId)?.name || "-";
@@ -244,6 +253,22 @@ export default function CustomerTable() {
           </tbody>
         </table>
       </div>
+      {/* ページネーションUI */}
+      {totalPages > 1 && (
+        <div className="flex justify-center items-center gap-4 my-4">
+          <button
+            className="px-3 py-1 border rounded disabled:opacity-50"
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page === 1}
+          >前へ</button>
+          <span className="text-sm">{page} / {totalPages}</span>
+          <button
+            className="px-3 py-1 border rounded disabled:opacity-50"
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={page === totalPages}
+          >次へ</button>
+        </div>
+      )}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger asChild>
           <Button className="bg-[#C41E3A] hover:bg-[#a81a30] text-white" onClick={() => { setEditTarget(null); reset(); }}>新規顧客追加</Button>
