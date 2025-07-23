@@ -12,6 +12,8 @@ export type Customer = {
   furigana: string;
   phone: string;
   address: string;
+  gender?: 'male' | 'female' | 'other' | '';
+  birthday?: string;
   createdAt?: Timestamp;
   sizeId?: string;
   price?: number;

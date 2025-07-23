@@ -16,20 +16,20 @@ import { collection, addDoc, updateDoc, doc, serverTimestamp, deleteDoc } from "
 import SearchBox from "@/components/SearchBox";
 import { Wish } from "@/types/wish";
 import CustomerImport from "@/components/CustomerImport";
+import { differenceInYears, parseISO } from "date-fns";
+import { SHICHIGOSAN, YAKUDOSHI } from "@/lib/notificationMaster";
+import Link from "next/link";
 
 const customerSchema = z.object({
   name: z.string().min(1, "氏名は必須です"),
   furigana: z.string().min(1, "フリガナは必須です"),
   phone: z.string().min(10, "電話番号は10桁以上").max(13),
-  address: z.string().optional(),
+  address: z.string().min(1, "住所は必須です"),
+  gender: z.enum(["male", "female", "other", ""]).optional(),
+  birthday: z.string().optional(),
   sizeId: z.string().optional(),
   price: z.number().optional(),
   wishId: z.string().optional(),
-  families: z.array(z.object({
-    name: z.string().optional(),
-    relation: z.string().optional(),
-    furigana: z.string().optional(),
-  })).optional(),
 });
 type CustomerForm = z.infer<typeof customerSchema>;
 
@@ -51,15 +51,14 @@ export default function CustomerTable() {
   } = useForm<CustomerForm>({
     resolver: zodResolver(customerSchema),
   });
-  const { fields, append, remove } = useFieldArray({
-    control,
-    name: "families",
-  });
-  const [familyToAdd, setFamilyToAdd] = useState<{ name: string; furigana: string; relation: string; address: string; phone: string } | null>(null);
+  // families, useFieldArray, familyToAdd, handleAddFamilyAsCustomer, append, remove, family関連のstateやUIを全て削除
+  // familiesに関するregisterや初期値セットも削除
+  // フォームから「家族」セクション全体を削除
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingCustomer, setPendingCustomer] = useState<CustomerForm | null>(null);
   const [dupInfo, setDupInfo] = useState<{ name: string; furigana: string; phone: string } | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [submitLoading, setSubmitLoading] = useState(false);
 
   const selectedSizeId = watch("sizeId");
   const selectedSize = sizes.find((s) => s.id === selectedSizeId);
@@ -74,32 +73,9 @@ export default function CustomerTable() {
   }, [selectedSize, setValue]);
 
   // 家族から顧客追加用の初期値セット
-  const handleAddFamilyAsCustomer = (family: Family | { name?: string; furigana?: string; relation?: string }) => {
-    setFamilyToAdd({
-      name: family.name ? String(family.name) : "",
-      furigana: family.furigana ? String(family.furigana) : "",
-      relation: family.relation ? String(family.relation) : "",
-      address: watch("address") || "",
-      phone: watch("phone") || "",
-    });
-    setEditTarget(null);
-    setOpen(true);
-    // フォーム初期値セットはuseEffectで対応
-  };
-
-  // familyToAddがセットされたらフォーム初期値をセット
-  useEffect(() => {
-    if (familyToAdd && open) {
-      reset({
-        name: familyToAdd.name,
-        furigana: familyToAdd.furigana,
-        address: familyToAdd.address,
-        phone: familyToAdd.phone,
-        // 他の項目は空
-      });
-      setFamilyToAdd(null);
-    }
-  }, [familyToAdd, open, reset]);
+  // families, useFieldArray, familyToAdd, handleAddFamilyAsCustomer, append, remove, family関連のstateやUIを全て削除
+  // familiesに関するregisterや初期値セットも削除
+  // フォームから「家族」セクション全体を削除
 
   const onSubmit = async (values: CustomerForm) => {
     // 重複チェック
@@ -115,7 +91,9 @@ export default function CustomerTable() {
       setConfirmOpen(true);
       return;
     }
+    setSubmitLoading(true);
     await actuallyAddCustomer(values);
+    setSubmitLoading(false);
   };
 
   // 実際の追加処理
@@ -125,9 +103,9 @@ export default function CustomerTable() {
       phone: formatPhone(values.phone),
       name: values.name.replace(/　/g, " "), // 全角空白→半角
       furigana: normalizeKana(values.furigana),
-      price: selectedSize?.price ?? null,
+      price: selectedSizeId ? selectedSize?.price ?? null : null,
       wishId: values.wishId || null,
-      families: values.families || [],
+      // families: values.families || [], // 家族情報は削除
     };
     if (editTarget) {
       await updateDoc(doc(db, "customers", editTarget.id), payload);
@@ -151,7 +129,9 @@ export default function CustomerTable() {
     setValue("sizeId", customer.sizeId || "");
     setValue("price", customer.price ?? undefined);
     setValue("wishId", customer.wishId || "");
-    setValue("families", customer.families || []);
+    setValue("gender", customer.gender || "");
+    setValue("birthday", customer.birthday || "");
+    // setValue("families", customer.families || []); // 家族情報は削除
     setOpen(true);
   };
 
@@ -179,12 +159,36 @@ export default function CustomerTable() {
     );
   });
 
+  // 通知対象者抽出
+  function getAge(birthday?: string) {
+    if (!birthday) return null;
+    try {
+      const now = new Date();
+      const endOfYear = new Date(now.getFullYear(), 11, 31); // 12月31日
+      return differenceInYears(endOfYear, parseISO(birthday));
+    } catch {
+      return null;
+    }
+  }
+  function matchMaster(age: number | null, gender: string, master: { age: number; gender: string; label: string }[]) {
+    if (age == null) return null;
+    return master.find((m) => m.age === age && m.gender === gender);
+  }
+  const shichigosan = filtered.filter((c) => matchMaster(getAge(c.birthday), c.gender || '', SHICHIGOSAN));
+  const yakudoshi = filtered.filter((c) => matchMaster(getAge(c.birthday), c.gender || '', YAKUDOSHI));
+
   // 住所グルーピング・アコーディオン表示を削除
 
   return (
     <div>
       <h2 className="text-xl font-bold mb-4 text-[#C41E3A]">顧客台帳</h2>
       <CustomerImport />
+      {(shichigosan.length > 0 || yakudoshi.length > 0) && (
+        <div className="mb-4 p-3 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 rounded">
+          <span className="font-bold">通知:</span> 七五三・厄年の該当者がいます。
+          <Link href="/notifications" className="ml-4 underline text-[#C41E3A]">通知対象者一覧を見る</Link>
+        </div>
+      )}
       <SearchBox onSearch={setSearch} />
       <div className="mb-4 overflow-x-auto rounded-lg border shadow-sm bg-white">
         <table className="min-w-[950px] w-full text-sm">
@@ -198,6 +202,9 @@ export default function CustomerTable() {
               <th className="px-3 py-2 text-left font-semibold">金額</th>
               <th className="px-3 py-2 text-left font-semibold">願意</th>
               <th className="px-3 py-2 text-left font-semibold">家族人数</th>
+              <th className="px-3 py-2 text-left font-semibold">性別</th>
+              <th className="px-3 py-2 text-left font-semibold">誕生日</th>
+              <th className="px-3 py-2 text-left font-semibold">年齢</th>
               <th className="px-3 py-2 text-left font-semibold">登録日</th>
               <th className="px-3 py-2 text-left font-semibold">操作</th>
             </tr>
@@ -223,6 +230,9 @@ export default function CustomerTable() {
                     <td className="px-3 py-2 whitespace-nowrap">{typeof price === "number" ? price.toLocaleString() + " 円" : "-"}</td>
                     <td className="px-3 py-2 whitespace-nowrap">{wishName}</td>
                     <td className="px-3 py-2 whitespace-nowrap">{familyCount > 0 ? familyCount : "-"}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">{c.gender === 'male' ? '男性' : c.gender === 'female' ? '女性' : c.gender === 'other' ? 'その他' : '-'}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">{c.birthday || '-'}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">{c.birthday ? (() => { try { return differenceInYears(new Date(), parseISO(c.birthday)); } catch { return '-'; } })() : '-'}</td>
                     <td className="px-3 py-2 whitespace-nowrap">{c.createdAt && c.createdAt.toDate ? c.createdAt.toDate().toLocaleDateString() : "-"}</td>
                     <td className="px-3 py-2 whitespace-nowrap">
                       <Button size="sm" variant="outline" className="border-[#C41E3A] text-[#C41E3A] hover:bg-[#C41E3A]/10" onClick={() => handleEdit(c)}>編集</Button>
@@ -244,23 +254,50 @@ export default function CustomerTable() {
           </DialogHeader>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-2">
             <div>
-              <label className="block text-xs font-semibold mb-1">氏名</label>
+              <label className="block text-xs font-semibold mb-1">氏名 <span className='text-red-500'>*</span></label>
               <input className="border px-2 py-1 w-full rounded" {...register("name")} />
               {errors.name && <div className="text-red-500 text-xs">{errors.name.message}</div>}
             </div>
             <div>
-              <label className="block text-xs font-semibold mb-1">フリガナ</label>
+              <label className="block text-xs font-semibold mb-1">フリガナ <span className='text-red-500'>*</span></label>
               <input className="border px-2 py-1 w-full rounded" {...register("furigana")} />
               {errors.furigana && <div className="text-red-500 text-xs">{errors.furigana.message}</div>}
             </div>
             <div>
-              <label className="block text-xs font-semibold mb-1">電話番号</label>
+              <label className="block text-xs font-semibold mb-1">電話番号 <span className='text-red-500'>*</span></label>
               <input className="border px-2 py-1 w-full rounded" {...register("phone")} inputMode="numeric" maxLength={11} />
               {errors.phone && <div className="text-red-500 text-xs">{errors.phone.message}</div>}
             </div>
             <div>
-              <label className="block text-xs font-semibold mb-1">住所</label>
+              <label className="block text-xs font-semibold mb-1">住所 <span className='text-red-500'>*</span></label>
               <input className="border px-2 py-1 w-full rounded" {...register("address")} />
+              {errors.address && <div className="text-red-500 text-xs">{errors.address.message}</div>}
+            </div>
+            <div>
+              <label className="block text-xs font-semibold mb-1">性別</label>
+              <div className="flex gap-4">
+                <label><input type="radio" value="male" {...register("gender")} /> 男性</label>
+                <label><input type="radio" value="female" {...register("gender")} /> 女性</label>
+                <label><input type="radio" value="other" {...register("gender")} /> その他</label>
+                <label><input type="radio" value="" {...register("gender")} /> 未選択</label>
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold mb-1">誕生日</label>
+              <input className="border px-2 py-1 w-full rounded" type="date" {...register("birthday")} />
+              {/* 年齢リアルタイム表示 */}
+              {(() => {
+                const bday = watch("birthday");
+                let age: number | null = null;
+                if (bday) {
+                  try {
+                    age = differenceInYears(new Date(), parseISO(bday));
+                  } catch {}
+                }
+                return (
+                  <div className="text-xs text-gray-600 mt-1">{bday ? `年齢: ${age ?? "-"} 歳` : ""}</div>
+                );
+              })()}
             </div>
             <div>
               <label className="block text-xs font-semibold mb-1">御札サイズ</label>
@@ -284,35 +321,18 @@ export default function CustomerTable() {
                 ))}
               </select>
             </div>
-            <div>
-              <label className="block text-xs font-semibold mb-1">家族</label>
-              <div className="space-y-2">
-                {fields.map((field, idx) => (
-                  <div key={field.id} className="flex gap-2 items-end">
-                    <div className="flex-1">
-                      <input className="border px-2 py-1 w-full rounded" placeholder="氏名" {...register(`families.${idx}.name` as const)} />
-                    </div>
-                    <div className="flex-1">
-                      <input className="border px-2 py-1 w-full rounded" placeholder="続柄" {...register(`families.${idx}.relation` as const)} />
-                    </div>
-                    <div className="flex-1">
-                      <input className="border px-2 py-1 w-full rounded" placeholder="フリガナ" {...register(`families.${idx}.furigana` as const)} />
-                    </div>
-                    <Button type="button" size="sm" variant="outline" onClick={() => remove(idx)}>
-                      削除
-                    </Button>
-                  </div>
-                ))}
-                <Button type="button" size="sm" className="mt-1" onClick={() => append({ name: "", relation: "", furigana: "" })}>
-                  家族を追加
-                </Button>
-              </div>
-            </div>
+            {/* 家族セクションを削除 */}
             <div className="flex gap-2 justify-end pt-2">
-              <Button type="submit" className="bg-[#C41E3A] hover:bg-[#a81a30] text-white">{editTarget ? "更新" : "追加"}</Button>
-              <Button type="button" variant="outline" onClick={() => setOpen(false)}>キャンセル</Button>
+              <Button type="submit" className="bg-[#C41E3A] hover:bg-[#a81a30] text-white" disabled={submitLoading}>
+                {submitLoading ? (
+                  <span className="flex items-center gap-2"><svg className="animate-spin h-4 w-4 text-white" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" /></svg>処理中...</span>
+                ) : (
+                  editTarget ? "更新" : "追加"
+                )}
+              </Button>
+              <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={submitLoading}>キャンセル</Button>
               {editTarget && (
-                <Button type="button" variant="destructive" onClick={() => setDeleteConfirmOpen(true)}>
+                <Button type="button" variant="destructive" onClick={() => setDeleteConfirmOpen(true)} disabled={submitLoading}>
                   削除
                 </Button>
               )}
