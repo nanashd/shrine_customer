@@ -179,6 +179,8 @@ export default function CustomerTable() {
     );
   });
 
+  // 住所グルーピング・アコーディオン表示を削除
+
   return (
     <div>
       <h2 className="text-xl font-bold mb-4 text-[#C41E3A]">顧客台帳</h2>
@@ -298,9 +300,6 @@ export default function CustomerTable() {
                     </div>
                     <Button type="button" size="sm" variant="outline" onClick={() => remove(idx)}>
                       削除
-                    </Button>
-                    <Button type="button" size="sm" className="bg-[#C41E3A] text-white" onClick={() => handleAddFamilyAsCustomer(fields[idx])}>
-                      顧客台帳に追加
                     </Button>
                   </div>
                 ))}
